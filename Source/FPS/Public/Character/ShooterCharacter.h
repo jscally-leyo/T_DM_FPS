@@ -6,6 +6,8 @@
 #include "GameFramework/Character.h"
 #include "ShooterCharacter.generated.h"
 
+class UInputAction;
+class UCombatComponent;
 class UCameraComponent;
 class USpringArmComponent;
 
@@ -24,7 +26,18 @@ protected:
 	virtual void BeginPlay() override;
 
 private:
-	// 1st person view (arms)
+	// Input callbacks
+	void Input_CycleWeapon();
+	void Input_ReloadWeapon();
+	void Input_FireWeapon_Pressed();
+	void Input_FireWeapon_Released();
+	void Input_AimWeapon_Pressed();
+	void Input_AimWeapon_Released();
+	
+	UPROPERTY(VisibleAnywhere)
+	TObjectPtr<UCombatComponent> Combat;
+	
+	// 1st person view (arms) - 3rd person mesh is inherited from the Character class
 	UPROPERTY(VisibleAnywhere)
 	TObjectPtr<USkeletalMeshComponent> Mesh1P;
 	
@@ -34,4 +47,15 @@ private:
 	UPROPERTY(VisibleAnywhere)
 	TObjectPtr<UCameraComponent> FirstPersonCamera;
 	
+	UPROPERTY(EditAnywhere, Category = "FPS|Input")
+	TObjectPtr<UInputAction> CycleWeaponAction;
+	
+	UPROPERTY(EditAnywhere, Category = "FPS|Input")
+	TObjectPtr<UInputAction> FireWeaponAction;
+	
+	UPROPERTY(EditAnywhere, Category = "FPS|Input")
+	TObjectPtr<UInputAction> ReloadWeaponAction;
+	
+	UPROPERTY(EditAnywhere, Category = "FPS|Input")
+	TObjectPtr<UInputAction> AimWeaponAction;
 };
