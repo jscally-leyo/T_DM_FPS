@@ -16,15 +16,21 @@ class FPS_API AWeapon : public AActor
 
 public:
 	AWeapon();
+	virtual void OnRep_Instigator() override;
 	
 	USkeletalMeshComponent* GetMesh1P() const;
 	USkeletalMeshComponent* GetMesh3P() const;
 
+	void AttachToOwningPawn() const;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "FPS|WeaponType")
+	FGameplayTag WeaponType;
+	
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "FPS|Aiming")
+	float AimFieldOfView;
+	
 protected:
 	virtual void BeginPlay() override;
-	
-	UPROPERTY(EditAnywhere, Category = "FPS|WeaponType")
-	FGameplayTag WeaponType;
 
 private:
 	// Weapon mesh 1st person view
@@ -34,4 +40,6 @@ private:
 	// Weapon mesh 3rd person view (what other players will see)
 	UPROPERTY(VisibleAnywhere)
 	TObjectPtr<USkeletalMeshComponent> Mesh3P;
+	
+	void SetMeshVisiblities(APawn* OwningPawn) const;
 };
