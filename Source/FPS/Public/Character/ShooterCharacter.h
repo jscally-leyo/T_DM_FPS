@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "Interfaces/PlayerInterface.h"
+#include "ShooterTypes/ShooterTypes.h"
 #include "ShooterCharacter.generated.h"
 
 class UInputAction;
@@ -37,6 +38,12 @@ public:
 	UFUNCTION(BlueprintCallable)
 	FRotator GetFixedAimRotation() const;
 	
+	UPROPERTY(BlueprintReadOnly, Category = "FPS|FABRIK")
+	FTransform FABRIK_SocketTransform;
+	
+	UFUNCTION(BlueprintCallable)
+	bool HasCurrentWeapon() const;
+	
 protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "FPS|Combat")
 	TObjectPtr<UCombatComponent> Combat;
@@ -49,6 +56,15 @@ protected:
 	
 	UFUNCTION(BlueprintImplementableEvent)
 	void OnAim(bool bIsAiming);
+	
+	UPROPERTY(BlueprintReadOnly, Category = "FPS|TurnInPlace")
+	float AO_Yaw;
+	
+	UPROPERTY(BlueprintReadOnly, Category = "FPS|TurnInPlace")
+	ETurningInPlace TurningStatus;
+	
+	UPROPERTY(BlueprintReadOnly, Category = "FPS|Strafing")
+	float MovementOffsetYaw;
 	
 private:
 	// Input callbacks
@@ -77,4 +93,11 @@ private:
 	
 	UPROPERTY(EditAnywhere, Category = "FPS|Input")
 	TObjectPtr<UInputAction> AimWeaponAction;
+	
+	void CalculateFABRIKSocketTransform();
+	void CalculateTurnInPlaceParameters(float DeltaTime);
+	void TurnInPlace(float DeltaTime);
+	
+	FRotator StartingAimRotation;
+	float InterpAO_Yaw;
 };

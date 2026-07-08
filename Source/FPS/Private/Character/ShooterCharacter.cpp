@@ -9,12 +9,12 @@
 #include "Data/WeaponData.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/SpringArmComponent.h"
+#include "Kismet/KismetMathLibrary.h"
+#include "Weapon/Weapon.h"
 
 AShooterCharacter::AShooterCharacter()
 {
 	PrimaryActorTick.bCanEverTick = true;
-	
-	GetCharacterMovement()->MovementState.bCanCrouch = true;
 	
 	SpringArm = CreateDefaultSubobject<USpringArmComponent>("SpringArm");
 	SpringArm->SetupAttachment(GetRootComponent());
@@ -48,6 +48,8 @@ AShooterCharacter::AShooterCharacter()
 	Combat->SetIsReplicated(true);
 	
 	DefaultFieldOfView = 90.f;
+	
+	TurningStatus = ETurningInPlace::NotTurning;
 }
 
 void AShooterCharacter::BeginPlay()
@@ -55,6 +57,7 @@ void AShooterCharacter::BeginPlay()
 	Super::BeginPlay();
 	
 	FirstPersonCamera->SetFieldOfView(DefaultFieldOfView);
+	StartingAimRotation = FRotator(0.f, GetBaseAimRotation().Yaw, 0.f);
 }
 
 void AShooterCharacter::BeginDestroy()
@@ -70,6 +73,86 @@ void AShooterCharacter::BeginDestroy()
 void AShooterCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+	
+	CalculateTurnInPlaceParameters(DeltaTime);
+	CalculateFABRIKSocketTransform();
+}
+
+void AShooterCharacter::CalculateTurnInPlaceParameters(float DeltaTime)
+{
+	FVector Velocity = GetVelocity();
+	Velocity.Z = 0.f; // We don't care about the Z here
+	float Speed = Velocity.Size(); //.Size2D() would automatically zero out the Z
+	bool bIsInAir = GetCharacterMovement()->IsFalling();
+	
+	// Standing still & not jumping
+	if (Speed == 0.f && !bIsInAir)
+	{
+		FRotator CurrentAimRotation(0.f, GetBaseAimRotation().Yaw, 0.f);
+		// Starting aim rotation is initially set in BeginPlay
+		FRotator DeltaAimRotation = UKismetMathLibrary::NormalizedDeltaRotator(CurrentAimRotation, StartingAimRotation);
+		AO_Yaw = DeltaAimRotation.Yaw;
+		if (TurningStatus == ETurningInPlace::NotTurning)
+		{
+			InterpAO_Yaw = AO_Yaw;
+		}
+		
+		TurnInPlace(DeltaTime); // Interpolates the InterAO_Yaw value to zero
+	}
+	
+	// If running or jumping
+	if (Speed > 0.f || bIsInAir)
+	{
+		StartingAimRotation = FRotator(0.f, GetBaseAimRotation().Yaw, 0.f);
+		AO_Yaw = 0.f;
+		FRotator AimRotation = GetBaseAimRotation();
+		FRotator MovementRotation = UKismetMathLibrary::MakeRotFromX(GetVelocity());
+		MovementOffsetYaw = UKismetMathLibrary::NormalizedDeltaRotator(MovementRotation, AimRotation).Yaw;
+		TurningStatus = ETurningInPlace::NotTurning;
+	}
+	
+	AO_Yaw *= -1.f;
+}
+
+void AShooterCharacter::TurnInPlace(float DeltaTime)
+{
+	if (AO_Yaw > 90.f)
+	{
+		TurningStatus = ETurningInPlace::Right;
+	} 
+	else if (AO_Yaw < -90.f)
+	{
+		TurningStatus = ETurningInPlace::Left;
+	}
+	
+	if (TurningStatus != ETurningInPlace::NotTurning)
+	{
+		InterpAO_Yaw = FMath::FInterpTo(InterpAO_Yaw, 0.f, DeltaTime, 4.f);
+		AO_Yaw = InterpAO_Yaw;
+		if (FMath::Abs(AO_Yaw) < 5.f)
+		{
+			TurningStatus = ETurningInPlace::NotTurning;
+			StartingAimRotation = FRotator(0.f, GetBaseAimRotation().Yaw, 0.f);
+		}
+	}
+}
+
+void AShooterCharacter::CalculateFABRIKSocketTransform()
+{
+	// To apply FABRIK (in ABP_ThirdPerson) we need the FABRIK-socket that was added to the mesh of the weapon
+	if (IsValid(Combat) && IsValid(Combat->CurrentWeapon) && IsValid(Combat->CurrentWeapon->GetMesh3P()))
+	{
+		// Socket names are hardcoded here, we could also add it to the data asset for the weapon
+		// By always naming it FABRIK_Socket for example, this is easily reusable logic
+		// In a transform, rotations are stored as quaternions
+		FABRIK_SocketTransform = Combat->CurrentWeapon->GetMesh3P()->GetSocketTransform("FABRIK_Socket", RTS_World);
+		FVector OutLocation;
+		FRotator OutRotation;
+		GetMesh()->TransformToBoneSpace("hand_r", FABRIK_SocketTransform.GetLocation(),
+			FABRIK_SocketTransform.GetRotation().Rotator(), OutLocation, OutRotation);
+		FABRIK_SocketTransform.SetLocation(OutLocation);
+		FABRIK_SocketTransform.SetRotation(OutRotation.Quaternion());
+	}
 }
 
 void AShooterCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -148,7 +231,7 @@ void AShooterCharacter::Input_AimWeapon_Released()
 FRotator AShooterCharacter::GetFixedAimRotation() const
 {
 	FRotator AimRotation = GetBaseAimRotation();
-	// We need to do this because of an optimization used by UE, which compresses the rotator when replicated)
+	// We need to do this because of an optimization used by UE, which compresses the rotator when replicated
 	// The result is that other players see a weird glitch when we look down
 	if (AimRotation.Pitch > 90.f && !IsLocallyControlled())
 	{
@@ -159,4 +242,9 @@ FRotator AShooterCharacter::GetFixedAimRotation() const
 	}
 	
 	return AimRotation;
+}
+
+bool AShooterCharacter::HasCurrentWeapon() const
+{
+	return IsValid(Combat) && Combat->CurrentWeapon != nullptr;
 }

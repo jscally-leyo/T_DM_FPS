@@ -36,9 +36,11 @@ public:
 	UPROPERTY(BlueprintReadOnly, Replicated)
 	bool bAiming;
 	
-protected:
 	UPROPERTY(Transient, BlueprintReadOnly, ReplicatedUsing = OnRep_CurrentWeapon)
 	TObjectPtr<AWeapon> CurrentWeapon;
+	
+protected:
+	
 
 private:
 	UFUNCTION() // This has to be included for OnRep_... functions like this, otherwise it will throw an error
