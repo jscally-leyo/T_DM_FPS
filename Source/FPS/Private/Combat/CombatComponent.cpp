@@ -2,16 +2,27 @@
 
 #include "Combat/CombatComponent.h"
 
+#include "TimerManager.h"
+#include "Animation/AnimInstance.h"
+#include "Animation/AnimMontage.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "Data/WeaponData.h"
 #include "Engine/Engine.h"
 #include "EntitySystem/MovieSceneEntitySystemRunner.h"
 #include "GameFramework/Pawn.h"
+#include "Interfaces/PlayerInterface.h"
 #include "Net/UnrealNetwork.h"
+#include "PhysicalMaterials/PhysicalMaterial.h"
 #include "Weapon/Weapon.h"
 
 UCombatComponent::UCombatComponent()
 {
+	//GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, TEXT("Local reached"), false);
 	PrimaryComponentTick.bCanEverTick = true;
+	TraceLength = 20000.f;
 
+	bAiming = false;
+	bTriggerPressed = false;
 }
 
 void UCombatComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
@@ -35,12 +46,86 @@ void UCombatComponent::Initiate_CycleWeapon()
 
 void UCombatComponent::Initiate_FireWeapon_Pressed()
 {
-	GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Cyan, TEXT("Initiate_FireWeapon_Pressed"), false);
+	bTriggerPressed = true;
+	Local_FireWeapon();
+}
+
+void UCombatComponent::Local_FireWeapon()
+{
+	if (!IsValid(CurrentWeapon)) return;
+	
+	ensure(IsValid(WeaponData)); // Some kind of check, because if this is invalid, that's a big problem
+	
+	// Play montage for the 1P mesh
+	UAnimMontage* Montage1P = WeaponData->FirstPersonMontages.FindChecked(CurrentWeapon->WeaponType).FireMontage;
+	USkeletalMeshComponent* Mesh1P = IPlayerInterface::Execute_GetMesh1P(GetOwner());
+	if (IsValid(Montage1P) && IsValid(Mesh1P))
+	{
+		Mesh1P->GetAnimInstance()->Montage_Play(Montage1P);
+	}
+	
+	FHitResult Hit;
+	CurrentWeapon->WeaponTrace(Hit, TraceLength);
+	
+	EPhysicalSurface ImpactSurfaceType = 
+		Hit.PhysMaterial.IsValid(false) ? 
+		Hit.PhysMaterial->SurfaceType.GetValue() :
+		SurfaceType1;
+	
+	CurrentWeapon->Local_Fire(Hit.ImpactPoint, Hit.ImpactNormal, ImpactSurfaceType, true);
+	
+	GetWorld()->GetTimerManager().SetTimer(FireTimer, this, &ThisClass::FireTimerFinished, CurrentWeapon->FireTime);
+	
+	Server_FireWeapon(Hit);
+}
+
+void UCombatComponent::FireTimerFinished()
+{
+	if (!IsValid(CurrentWeapon)) return;
+	
+	// Handle automatic fire
+	if (bTriggerPressed && CurrentWeapon->FireType == EFireType::Auto)
+	{
+		Local_FireWeapon();
+	}
+}
+
+void UCombatComponent::Server_FireWeapon_Implementation(const FHitResult& Hit)
+{
+	MultiCast_FireWeapon(Hit);
+}
+
+void UCombatComponent::MultiCast_FireWeapon_Implementation(const FHitResult& Hit)
+{
+	APawn* OwningPawn = Cast<APawn>(GetOwner());
+	if (OwningPawn->IsLocallyControlled())
+	{
+		// Do locally controlled stuff --> already done at this point with Local_FireWeapon()
+	}
+	else
+	{
+		ensure(IsValid(WeaponData)); // Some kind of check, because if this is invalid, that's a big problem
+	
+		EPhysicalSurface ImpactSurfaceType = 
+		Hit.PhysMaterial.IsValid(false) ? 
+		Hit.PhysMaterial->SurfaceType.GetValue() :
+		SurfaceType1;
+	
+		CurrentWeapon->Local_Fire(Hit.ImpactPoint, Hit.ImpactNormal, ImpactSurfaceType, false);
+		
+		// Play montage for the 3P mesh
+		UAnimMontage* Montage3P = WeaponData->ThirdPersonMontages.FindChecked(CurrentWeapon->WeaponType).FireMontage;
+		USkeletalMeshComponent* Mesh3P = IPlayerInterface::Execute_GetMesh3P(GetOwner());
+		if (IsValid(Montage3P) && IsValid(Mesh3P))
+		{
+			Mesh3P->GetAnimInstance()->Montage_Play(Montage3P);
+		}
+	}
 }
 
 void UCombatComponent::Initiate_FireWeapon_Released()
 {
-	GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Cyan, TEXT("Initiate_FireWeapon_Released"), false);
+	bTriggerPressed = false;
 }
 
 void UCombatComponent::Initiate_ReloadWeapon()

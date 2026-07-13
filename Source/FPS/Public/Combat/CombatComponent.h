@@ -40,7 +40,8 @@ public:
 	TObjectPtr<AWeapon> CurrentWeapon;
 	
 protected:
-	
+	UPROPERTY(EditDefaultsOnly, Category = "FPS|Weapon")
+	float TraceLength;
 
 private:
 	UFUNCTION() // This has to be included for OnRep_... functions like this, otherwise it will throw an error
@@ -57,7 +58,18 @@ private:
 	UFUNCTION(Server, Reliable) // Aiming is important, so Reliable can be used
 	void Server_Aim(bool bPressed);
 	
-	void Local_Aim(bool bPressed);
+	UFUNCTION(Server, Reliable) // Firing is important, so Reliable can be used
+	void Server_FireWeapon(const FHitResult& Hit);
 	
+	UFUNCTION(NetMulticast, Reliable)
+	void MultiCast_FireWeapon(const FHitResult& Hit);
+	
+	void Local_Aim(bool bPressed);
+	void Local_FireWeapon();
+	
+	// For automatic firing
+	bool bTriggerPressed;
+	FTimerHandle FireTimer;
+	void FireTimerFinished();
 };
 

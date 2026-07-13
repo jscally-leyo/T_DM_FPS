@@ -7,6 +7,15 @@
 #include "GameFramework/Actor.h"
 #include "Weapon.generated.h"
 
+enum EPhysicalSurface : int; // Add "PhysicsCore" to Build.cs (PublicDependencyModuleNames)
+
+UENUM(BlueprintType)
+enum class EFireType : uint8
+{
+	Auto UMETA(DisplayName = "Automatic"),
+	SemiAuto UMETA(DisplayName = "SemiAutomatic"),
+};
+
 class USkeletalMeshComponent;
 
 UCLASS()
@@ -29,17 +38,35 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "FPS|Aiming")
 	float AimFieldOfView;
 	
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "FPS|Trace")
+	float TraceRadius;
+	
+	void WeaponTrace(FHitResult& OutHit, float TraceLength);
+	
+	void Local_Fire(const FVector& ImpactPoint, const FVector& ImpactNormal, 
+		TEnumAsByte<EPhysicalSurface> ImpactSurfaceType, bool bIsFirstPerson);
+	
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "FPS|FireType") // EditAnywhere so we can change it on instances if needed
+	EFireType FireType;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "FPS|FireType")
+	float FireTime;
+	
 protected:
 	virtual void BeginPlay() override;
-
-private:
+	
+	UFUNCTION(BlueprintImplementableEvent)
+	void FireEffects(const FVector& ImpactPoint, const FVector& ImpactNormal, 
+		EPhysicalSurface ImpactSurfaceType, bool bIsFirstPerson);
+	
 	// Weapon mesh 1st person view
-	UPROPERTY(VisibleAnywhere)
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="FPS|Weapon")
 	TObjectPtr<USkeletalMeshComponent> Mesh1P;
 	
 	// Weapon mesh 3rd person view (what other players will see)
-	UPROPERTY(VisibleAnywhere)
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="FPS|Weapon")
 	TObjectPtr<USkeletalMeshComponent> Mesh3P;
-	
+
+private:
 	void SetMeshVisiblities(APawn* OwningPawn) const;
 };
