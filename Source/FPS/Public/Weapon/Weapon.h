@@ -46,11 +46,24 @@ public:
 	void Local_Fire(const FVector& ImpactPoint, const FVector& ImpactNormal, 
 		TEnumAsByte<EPhysicalSurface> ImpactSurfaceType, bool bIsFirstPerson);
 	
+	void Auth_Fire();
+	void Rep_Fire(int32 AuthAmmo);
+	
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "FPS|FireType") // EditAnywhere so we can change it on instances if needed
 	EFireType FireType;
 	
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "FPS|FireType")
 	float FireTime;
+	
+	// Ammo --> not replicated, because we follow the client-side prediction algorythm (lecture 39)
+	UPROPERTY(EditAnywhere, Category = "FPS|Ammo")
+	int32 Ammo; // In the magazine/clip in the weapon
+	
+	UPROPERTY(EditAnywhere, Category = "FPS|Ammo")
+	int32 MagCapacity;
+	
+	UPROPERTY(EditAnywhere, Category = "FPS|Ammo")
+	int32 StartingCarriedAmmo; // The total starting ammo for this weapon
 	
 protected:
 	virtual void BeginPlay() override;
@@ -69,4 +82,6 @@ protected:
 
 private:
 	void SetMeshVisiblities(APawn* OwningPawn) const;
+	
+	int32 Sequence; // Part of the client-side prediction algorythm
 };
