@@ -54,6 +54,10 @@ void UCombatComponent::Initiate_FireWeapon_Pressed()
 	{
 		Local_FireWeapon();
 	}
+	else
+	{
+		CurrentWeapon->DryFireEffects();
+	}
 }
 
 void UCombatComponent::Local_FireWeapon()
@@ -90,9 +94,16 @@ void UCombatComponent::FireTimerFinished()
 	if (!IsValid(CurrentWeapon)) return;
 	
 	// Handle automatic fire
-	if (bTriggerPressed && CurrentWeapon->FireType == EFireType::Auto && CurrentWeapon->Ammo > 0)
+	if (bTriggerPressed && CurrentWeapon->FireType == EFireType::Auto)
 	{
-		Local_FireWeapon();
+		if (CurrentWeapon->Ammo > 0)
+		{
+			Local_FireWeapon();
+		}
+		else
+		{
+			CurrentWeapon->DryFireEffects();
+		}
 	}
 }
 

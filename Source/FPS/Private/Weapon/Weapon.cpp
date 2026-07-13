@@ -103,7 +103,6 @@ void AWeapon::Local_Fire(const FVector& ImpactPoint, const FVector& ImpactNormal
 	{
 		Ammo = FMath::Clamp(Ammo - 1, 0, MagCapacity);
 		++Sequence; // Part of the client-side prediction model
-		
 	}
 }
 

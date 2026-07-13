@@ -64,6 +64,9 @@ public:
 	
 	UPROPERTY(EditAnywhere, Category = "FPS|Ammo")
 	int32 StartingCarriedAmmo; // The total starting ammo for this weapon
+		
+	UFUNCTION(BlueprintImplementableEvent)
+	void DryFireEffects(); // Called from CombatComponent
 	
 protected:
 	virtual void BeginPlay() override;
