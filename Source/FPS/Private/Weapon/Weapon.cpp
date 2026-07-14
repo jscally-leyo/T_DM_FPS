@@ -8,6 +8,7 @@
 #include "GameFramework/Pawn.h"
 #include "Interfaces/PlayerInterface.h"
 #include "Kismet/KismetMathLibrary.h"
+#include "Materials/MaterialInstanceDynamic.h"
 
 AWeapon::AWeapon()
 {
@@ -129,6 +130,28 @@ USkeletalMeshComponent* AWeapon::GetMesh1P() const
 USkeletalMeshComponent* AWeapon::GetMesh3P() const
 {
 	return Mesh3P;
+}
+
+UMaterialInstanceDynamic* AWeapon::GetReticleDynamicMaterialInstance()
+{
+	// If it's already created, just return it - If not, create it
+	if (!IsValid(DynMatInst_Reticle))
+	{
+		DynMatInst_Reticle = UMaterialInstanceDynamic::Create(ReticleMaterial, this);
+	}
+	
+	return DynMatInst_Reticle;
+}
+
+UMaterialInstanceDynamic* AWeapon::GetAmmoCounterDynamicMaterialInstance()
+{
+	// If it's already created, just return it - If not, create it
+	if (!IsValid(DynMatInst_AmmoCounter))
+	{
+		DynMatInst_AmmoCounter = UMaterialInstanceDynamic::Create(AmmoCounterMaterial, this);
+	}
+	
+	return DynMatInst_AmmoCounter;
 }
 
 void AWeapon::AttachToOwningPawn() const

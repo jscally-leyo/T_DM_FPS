@@ -17,6 +17,8 @@ enum class EFireType : uint8
 };
 
 class USkeletalMeshComponent;
+class UMaterialInstanceDynamic;
+class UMaterialInterface;
 
 UCLASS()
 class FPS_API AWeapon : public AActor
@@ -29,6 +31,8 @@ public:
 	
 	USkeletalMeshComponent* GetMesh1P() const;
 	USkeletalMeshComponent* GetMesh3P() const;
+	UMaterialInstanceDynamic* GetReticleDynamicMaterialInstance();
+	UMaterialInstanceDynamic* GetAmmoCounterDynamicMaterialInstance();
 
 	void AttachToOwningPawn() const;
 	
@@ -87,4 +91,16 @@ private:
 	void SetMeshVisiblities(APawn* OwningPawn) const;
 	
 	int32 Sequence; // Part of the client-side prediction algorythm
+	
+	UPROPERTY(EditDefaultsOnly, Category = "FPS|Weapon")
+	TObjectPtr<UMaterialInterface> ReticleMaterial;
+	
+	UPROPERTY(EditDefaultsOnly, Category = "FPS|Weapon")
+	TObjectPtr<UMaterialInterface> AmmoCounterMaterial;
+	
+	UPROPERTY()
+	TObjectPtr<UMaterialInstanceDynamic> DynMatInst_Reticle;
+	
+	UPROPERTY()
+	TObjectPtr<UMaterialInstanceDynamic> DynMatInst_AmmoCounter;
 };

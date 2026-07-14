@@ -8,6 +8,12 @@
 #include "Blueprint/UserWidget.h"
 #include "ShooterReticle.generated.h"
 
+namespace Ammo
+{
+	const FName Rounds_Current = FName("Rounds_Current");
+	const FName Rounds_Max = FName("Rounds_Max");
+}
+
 class AWeapon;
 class UImage;
 
@@ -36,4 +42,13 @@ private:
 	
 	UFUNCTION()
 	void OnWeaponFirstReplicated(AWeapon* Weapon);
+	
+	UFUNCTION()
+	void OnReticleChanged(UMaterialInstanceDynamic* ReticleDynMatInst);
+	
+	UFUNCTION()
+	void OnAmmoCounterChanged(UMaterialInstanceDynamic* AmmoCounterDynMatInst, int32 RoundsCurrent, int32 RoundsMax);
+	
+	UFUNCTION()
+	void OnRoundFired(int32 RoundsCurrent, int32 RoundsMax);
 };

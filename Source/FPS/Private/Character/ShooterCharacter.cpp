@@ -181,6 +181,16 @@ void AShooterCharacter::PossessedBy(AController* NewController)
 	}
 }
 
+void AShooterCharacter::OnRep_PlayerState()
+{
+	Super::OnRep_PlayerState();
+	
+	if (IsValid(Combat))
+	{
+		Combat->InitializeWeaponWidgets();
+	}
+}
+
 FName AShooterCharacter::GetWeaponAttachPoint_Implementation(const FGameplayTag& WeaponType) const
 {
 	checkf(Combat->WeaponData, TEXT("No Weapon Data Asset - Please fill out BP_ShooterCharacter"))
@@ -204,6 +214,11 @@ void AShooterCharacter::WeaponReplicated_Implementation()
 		bWeaponFirstReplicated = true;
 		OnWeaponFirstReplicated.Broadcast(Combat->CurrentWeapon);
 	}
+}
+
+AWeapon* AShooterCharacter::GetCurrentWeapon_Implementation()
+{
+	return Combat->CurrentWeapon;
 }
 
 void AShooterCharacter::Input_CycleWeapon()
