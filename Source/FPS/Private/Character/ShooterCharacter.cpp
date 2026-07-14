@@ -50,6 +50,8 @@ AShooterCharacter::AShooterCharacter()
 	DefaultFieldOfView = 90.f;
 	
 	TurningStatus = ETurningInPlace::NotTurning;
+	
+	bWeaponFirstReplicated = false;
 }
 
 void AShooterCharacter::BeginPlay()
@@ -193,6 +195,15 @@ USkeletalMeshComponent* AShooterCharacter::GetMesh1P_Implementation() const
 USkeletalMeshComponent* AShooterCharacter::GetMesh3P_Implementation() const
 {
 	return GetMesh();
+}
+
+void AShooterCharacter::WeaponReplicated_Implementation()
+{
+	if (!bWeaponFirstReplicated)
+	{
+		bWeaponFirstReplicated = true;
+		OnWeaponFirstReplicated.Broadcast(Combat->CurrentWeapon);
+	}
 }
 
 void AShooterCharacter::Input_CycleWeapon()
