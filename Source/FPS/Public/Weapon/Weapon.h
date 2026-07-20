@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameplayTagContainer.h"
 #include "GameFramework/Actor.h"
+#include "ShooterTypes/ShooterTypes.h"
 #include "Weapon.generated.h"
 
 enum EPhysicalSurface : int; // Add "PhysicsCore" to Build.cs (PublicDependencyModuleNames)
@@ -71,6 +72,9 @@ public:
 		
 	UFUNCTION(BlueprintImplementableEvent)
 	void DryFireEffects(); // Called from CombatComponent
+	
+	UPROPERTY(EditDefaultsOnly, Category = "FPS|Reticle")
+	FReticleParams ReticleParams;
 	
 protected:
 	virtual void BeginPlay() override;

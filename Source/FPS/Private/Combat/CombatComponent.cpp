@@ -9,8 +9,10 @@
 #include "Data/WeaponData.h"
 #include "Engine/Engine.h"
 #include "EntitySystem/MovieSceneEntitySystemRunner.h"
+#include "FPS/FPS.h"
 #include "GameFramework/Pawn.h"
 #include "Interfaces/PlayerInterface.h"
+#include "Kismet/KismetMathLibrary.h"
 #include "Net/UnrealNetwork.h"
 #include "PhysicalMaterials/PhysicalMaterial.h"
 #include "Weapon/Weapon.h"
@@ -28,6 +30,43 @@ UCombatComponent::UCombatComponent()
 void UCombatComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+	
+	// Check if we are aiming at another player
+	UObject* OwningTest = GetOwner();
+	APawn* OwningPawn = Cast<APawn>(GetOwner());
+	if (!IsValid(OwningPawn) || !OwningPawn->IsLocallyControlled()) return;
+	
+	APlayerController* PC = Cast<APlayerController>(OwningPawn->GetController());
+	if (!IsValid(PC)) return;
+	
+	FVector EyesWorldLocation;
+	FRotator EyesWorldRotation;
+	PC->GetActorEyesViewPoint(EyesWorldLocation, EyesWorldRotation);
+	const FVector EyesWorldDirection = UKismetMathLibrary::GetForwardVector(EyesWorldRotation);
+	
+	const FVector Start = EyesWorldLocation;
+	const FVector End = Start + EyesWorldDirection * TraceLength;
+	
+	FHitResult Hit;
+	FCollisionQueryParams QueryParams;
+	QueryParams.AddIgnoredActor(GetOwner());
+	
+	FCollisionResponseParams ResponseParams;
+	ResponseParams.CollisionResponse.SetAllChannels(ECR_Ignore);
+	ResponseParams.CollisionResponse.SetResponse(ECC_Pawn, ECR_Block);
+	ResponseParams.CollisionResponse.SetResponse(ECC_PhysicsBody, ECR_Block);
+	
+	GetWorld()->LineTraceSingleByChannel(Hit, Start, End, FPSTraceChannels::ECC_Weapon, QueryParams, ResponseParams);
+	
+	bHitPlayer = IsValid(Hit.GetActor()) && Hit.GetActor()->Implements<UPlayerInterface>();
+	
+	// We want to know if the hit status changed from last frame
+	if (bHitPlayer != bHitPlayerLastFrame)
+	{
+		OnTargetingPlayerStatusChanged.Broadcast(bHitPlayer);
+	}
+	
+	bHitPlayerLastFrame = bHitPlayer;
 }
 
 void UCombatComponent::GetLifetimeReplicatedProps(TArray<class FLifetimeProperty>& OutLifetimeProps) const
@@ -189,6 +228,7 @@ void UCombatComponent::Local_Aim(bool bPressed)
 {
 	// Will set the boolean locally or on server, depending on which function calls it (see functions above)
 	bAiming = bPressed;
+	OnAimingStatusChanged.Broadcast(bAiming);
 }
 
 void UCombatComponent::Equip(AWeapon* Weapon)
@@ -244,7 +284,7 @@ void UCombatComponent::InitializeWeaponWidgets()
 {
 	if (IsValid(CurrentWeapon))
 	{
-		OnReticleChanged.Broadcast(CurrentWeapon->GetReticleDynamicMaterialInstance());
+		OnReticleChanged.Broadcast(CurrentWeapon->GetReticleDynamicMaterialInstance(), CurrentWeapon->ReticleParams, bHitPlayer);
 		OnAmmoCounterChanged.Broadcast(CurrentWeapon->GetAmmoCounterDynamicMaterialInstance(), CurrentWeapon->Ammo, CurrentWeapon->MagCapacity);
 	}
 }
