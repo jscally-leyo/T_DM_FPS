@@ -139,7 +139,7 @@ private:
 	void Server_FireWeapon(const FHitResult& Hit);
 	
 	UFUNCTION(NetMulticast, Reliable)
-	void MultiCast_FireWeapon(const FHitResult& Hit, int32 Auth_Ammo);
+	void MultiCast_FireWeapon(const FHitResult& Hit, int32 AuthAmmo);
 	
 	void Local_Aim(bool bPressed);
 	void Local_FireWeapon();

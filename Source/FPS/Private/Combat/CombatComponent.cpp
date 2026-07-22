@@ -18,6 +18,13 @@
 #include "PhysicalMaterials/PhysicalMaterial.h"
 #include "Weapon/Weapon.h"
 
+/* TEXT FOR DEBUG MESSAGE
+	if (IsValid(CurrentWeapon))
+	{
+		GEngine->AddOnScreenDebugMessage(1, 0.1f, FColor::Cyan, FString::Printf(TEXT("Ammo: %d"), CurrentWeapon->Ammo));
+	}
+*/
+
 UCombatComponent::UCombatComponent()
 {
 	//GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, TEXT("Local reached"), false);
@@ -70,6 +77,7 @@ void UCombatComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActo
 	}
 	
 	bHitPlayerLastFrame = bHitPlayer;
+	
 }
 
 void UCombatComponent::GetLifetimeReplicatedProps(TArray<class FLifetimeProperty>& OutLifetimeProps) const
@@ -247,9 +255,12 @@ void UCombatComponent::FireTimerFinished()
 void UCombatComponent::Server_FireWeapon_Implementation(const FHitResult& Hit)
 {
 	// Part of the client-side prediction algorythm
-	// Ccheck if we are the listen server (is also then locally controlled as being the host) or a normal locally controlled player
+	// Check if we are the listen server (is also then locally controlled as being the host) or a normal locally controlled player
 	if (!IsValid(CurrentWeapon)) return;
-	if (GetNetMode() != NM_ListenServer || !Cast<APawn>(GetOwner())->IsLocallyControlled())
+	
+	//ORIGINAL CODE: if (GetNetMode() != NM_ListenServer || !Cast<APawn>(GetOwner())->IsLocallyControlled())
+	//MY FIX: if ((GetNetMode() != NM_ListenServer && GetNetMode() != NM_Standalone ) || !Cast<APawn>(GetOwner())->IsLocallyControlled())
+	if (!Cast<APawn>(GetOwner())->IsLocallyControlled())
 	{
 		CurrentWeapon->Auth_Fire();	
 	}
@@ -257,7 +268,7 @@ void UCombatComponent::Server_FireWeapon_Implementation(const FHitResult& Hit)
 	MultiCast_FireWeapon(Hit, CurrentWeapon->Ammo);
 }
 
-void UCombatComponent::MultiCast_FireWeapon_Implementation(const FHitResult& Hit, int32 Auth_Ammo)
+void UCombatComponent::MultiCast_FireWeapon_Implementation(const FHitResult& Hit, int32 AuthAmmo)
 {
 	APawn* OwningPawn = Cast<APawn>(GetOwner());
 	if (OwningPawn->IsLocallyControlled())
@@ -265,7 +276,7 @@ void UCombatComponent::MultiCast_FireWeapon_Implementation(const FHitResult& Hit
 		// Do locally controlled stuff --> already done at this point with Local_FireWeapon()
 		
 		// Part of the client-side prediction algorythm
-		CurrentWeapon->Rep_Fire(Auth_Ammo);
+		CurrentWeapon->Rep_Fire(AuthAmmo);
 	}
 	else
 	{
