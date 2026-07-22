@@ -212,13 +212,23 @@ void AShooterCharacter::WeaponReplicated_Implementation()
 	if (!bWeaponFirstReplicated)
 	{
 		bWeaponFirstReplicated = true;
-		OnWeaponFirstReplicated.Broadcast(Combat->CurrentWeapon);
+		OnWeaponFirstReplicated.Broadcast(Combat->CurrentWeapon, Combat->bHitPlayer);
 	}
 }
 
 AWeapon* AShooterCharacter::GetCurrentWeapon_Implementation()
 {
 	return Combat->CurrentWeapon;
+}
+
+int32 AShooterCharacter::GetReserveAmmo_Implementation() const
+{
+	return Combat->CurrentReserveAmmo;
+}
+
+void AShooterCharacter::Notify_CycleWeapon_Implementation()
+{
+	Combat->Notify_CycleWeapon();
 }
 
 void AShooterCharacter::Input_CycleWeapon()

@@ -3,10 +3,12 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "GameplayTagContainer.h"
 #include "GameFramework/Actor.h"
 #include "Runtime/Engine/Classes/Components/ActorComponent.h"
 #include "CombatComponent.generated.h"
 
+class UAnimMontage;
 class AWeapon;
 class UWeaponData;
 class UMaterialInstanceDynamic;
@@ -23,9 +25,10 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FAmmoCounterChanged,
 	int32, RoundsMax
 	);
 
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FRoundFired,
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FRoundFired,
 	int32, RoundsCurrent,
-	int32, RoundsMax
+	int32, RoundsMax,
+	int32, RoundsInReserve
 	);
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FAimingStatusChanged,
@@ -34,6 +37,12 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FAimingStatusChanged,
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FTargetingPlayerStatusChanged,
 	bool, bTargeting
+	);
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FCurrentReserveAmmoChanged,
+	int32, RoundsInReserve,
+	int32, RoundsInWeapon,
+	UMaterialInterface*, WeaponIconMaterial
 	);
 
 UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))
@@ -58,6 +67,8 @@ public:
 	void Initiate_Aim_Pressed();
 	void Initiate_Aim_Released();
 	
+	void Notify_CycleWeapon();
+	
 	UPROPERTY(BlueprintAssignable)
 	FReticleChanged OnReticleChanged;
 	
@@ -73,10 +84,19 @@ public:
 	UPROPERTY(BlueprintAssignable)
 	FTargetingPlayerStatusChanged OnTargetingPlayerStatusChanged;
 	
+	UPROPERTY(BlueprintAssignable)
+	FCurrentReserveAmmoChanged OnCurrentReserveAmmoChanged;
+	
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "FPS|Weapon")
 	TObjectPtr<UWeaponData> WeaponData;
 	
 	void Equip(AWeapon* Weapon);
+	
+	void EquipWeapon(AWeapon* Weapon);
+	
+	UFUNCTION(Server, Reliable)
+	void Server_EquipWeapon(AWeapon* Weapon);
+	
 	void SpawnInventory();
 	void DestroyInventory();
 	
@@ -88,9 +108,17 @@ public:
 	
 	void InitializeWeaponWidgets();
 	
+	UPROPERTY(ReplicatedUsing = OnRep_CurrentReserveAmmo)
+	int32 CurrentReserveAmmo;
+	
+	bool bHitPlayer;
+	
 protected:
 	UPROPERTY(EditDefaultsOnly, Category = "FPS|Weapon")
 	float TraceLength;
+	
+	UFUNCTION()
+	void BlendOut_CycleWeapon(UAnimMontage* Montage, bool bInterrupted);
 
 private:
 	UFUNCTION() // This has to be included for OnRep_... functions like this, otherwise it will throw an error
@@ -122,6 +150,24 @@ private:
 	void FireTimerFinished();
 	
 	bool bHitPlayerLastFrame;
-	bool bHitPlayer;
+	
+	UFUNCTION()
+	void OnRep_CurrentReserveAmmo();
+	
+	TMap<FGameplayTag, int32> ReserveAmmo;
+	
+	int32 Local_WeaponIndex;
+	int32 AdvanceWeaponIndex();
+	
+	void Local_CycleWeapon(int32 WeaponIndex);
+	
+	UFUNCTION(Server, Reliable)
+	void Server_CycleWeapon(int32 WeaponIndex);
+	
+	UFUNCTION(NetMulticast, Reliable)
+	void MultiCast_CycleWeapon(int32 WeaponIndex);
+	
+	void SetCurrentWeapon(AWeapon* NewWeapon, AWeapon* LastWeapon);
+	
 };
 
