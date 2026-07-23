@@ -68,6 +68,9 @@ public:
 	void Initiate_Aim_Released();
 	
 	void Notify_CycleWeapon();
+	void Notify_ReloadWeapon();
+	
+	void AddAmmo(const FGameplayTag& WeaponType, int32 AmmoAmount);
 	
 	UPROPERTY(BlueprintAssignable)
 	FReticleChanged OnReticleChanged;
@@ -168,6 +171,16 @@ private:
 	void MultiCast_CycleWeapon(int32 WeaponIndex);
 	
 	void SetCurrentWeapon(AWeapon* NewWeapon, AWeapon* LastWeapon);
+
+	void Local_ReloadWeapon();
 	
+	UFUNCTION(Server, Reliable)
+	void Server_ReloadWeapon();
+	
+	UFUNCTION(NetMulticast, Reliable)
+	void Multicast_ReloadWeapon();
+	
+	UFUNCTION(Client, Reliable)
+	void Client_ReloadWeapon(int32 NewWeaponAmmo, int32 NewCarriedAmmo);
 };
 

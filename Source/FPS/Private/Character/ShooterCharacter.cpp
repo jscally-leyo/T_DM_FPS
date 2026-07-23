@@ -231,6 +231,19 @@ void AShooterCharacter::Notify_CycleWeapon_Implementation()
 	Combat->Notify_CycleWeapon();
 }
 
+void AShooterCharacter::Notify_ReloadWeapon_Implementation()
+{
+	Combat->Notify_ReloadWeapon();
+}
+
+void AShooterCharacter::AddAmmo_Implementation(const FGameplayTag& WeaponType, int32 AmmoAmount)
+{
+	if (HasAuthority() && IsValid(Combat))
+	{
+		Combat->AddAmmo(WeaponType, AmmoAmount);
+	}
+}
+
 void AShooterCharacter::Input_CycleWeapon()
 {
 	// We could check for valid/nullptr, but if this is causing an error then we want the crash to investigate and fix it

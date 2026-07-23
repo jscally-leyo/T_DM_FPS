@@ -77,6 +77,12 @@ void UCombatComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActo
 	}
 	
 	bHitPlayerLastFrame = bHitPlayer;
+	/*
+	if (IsValid(CurrentWeapon))
+	{
+		GEngine->AddOnScreenDebugMessage(1, 0.1f, FColor::Cyan, FString::Printf(TEXT("Ammo: %d"), CurrentWeapon->Ammo));
+	}
+	*/
 	
 }
 
@@ -209,6 +215,8 @@ void UCombatComponent::Local_FireWeapon()
 	
 	ensure(IsValid(WeaponData)); // Some kind of check, because if this is invalid, that's a big problem
 	
+	CurrentWeapon->WeaponStatus = EWeaponStatus::Firing;
+	
 	// Play montage for the 1P mesh
 	UAnimMontage* Montage1P = WeaponData->FirstPersonMontages.FindChecked(CurrentWeapon->WeaponType).FireMontage;
 	USkeletalMeshComponent* Mesh1P = IPlayerInterface::Execute_GetMesh1P(GetOwner());
@@ -236,7 +244,22 @@ void UCombatComponent::Local_FireWeapon()
 
 void UCombatComponent::FireTimerFinished()
 {
-	if (!IsValid(CurrentWeapon)) return;
+	APawn* OwningPawn = Cast<APawn>(GetOwner());
+	
+	if (!IsValid(CurrentWeapon) || !IsValid(OwningPawn)) return;
+	
+	// Automatic reload when ammo hits 0
+	if (CurrentWeapon->Ammo == 0 && CurrentReserveAmmo > 0 && OwningPawn->IsLocallyControlled())
+	{
+		Local_ReloadWeapon();
+		Server_ReloadWeapon();
+		return;
+	}
+	
+	if (CurrentWeapon->WeaponStatus == EWeaponStatus::Firing)
+	{
+		CurrentWeapon->WeaponStatus = EWeaponStatus::Idle;
+	}
 	
 	// Handle automatic fire
 	if (bTriggerPressed && CurrentWeapon->FireType == EFireType::Auto)
@@ -258,8 +281,16 @@ void UCombatComponent::Server_FireWeapon_Implementation(const FHitResult& Hit)
 	// Check if we are the listen server (is also then locally controlled as being the host) or a normal locally controlled player
 	if (!IsValid(CurrentWeapon)) return;
 	
+	// Server side ammo validation
+	// Not sure in which lecture this was put here, but DM code has <= 0 but then Rep_Fire() is never reached! 
+	// Result: Weapon.Sequence stays at 1 instead of going back to 0 for that last round!!
+	// So then, after reloading, we already start with a Sequence of 1, which means 2 rounds are deducted when shooting
+	// This messes up the ammo count completely for server or standalone! BUT, not on clients, because there Rep_Fire() is still reached via the Multicast (I think)
+	// UPDATE: was fixed in lecture 64 'Automatic Reload' by placing an extra if (!GetInstigator()->HasAuthority()) in Local_Fire() and Rep_Fire() in Weapon.cpp
+	if (CurrentWeapon->Ammo <= 0) return;
+	
 	//ORIGINAL CODE: if (GetNetMode() != NM_ListenServer || !Cast<APawn>(GetOwner())->IsLocallyControlled())
-	//MY FIX: if ((GetNetMode() != NM_ListenServer && GetNetMode() != NM_Standalone ) || !Cast<APawn>(GetOwner())->IsLocallyControlled())
+	// if ((GetNetMode() != NM_ListenServer && GetNetMode() != NM_Standalone ) || !Cast<APawn>(GetOwner())->IsLocallyControlled())
 	if (!Cast<APawn>(GetOwner())->IsLocallyControlled())
 	{
 		CurrentWeapon->Auth_Fire();	
@@ -306,7 +337,139 @@ void UCombatComponent::Initiate_FireWeapon_Released()
 
 void UCombatComponent::Initiate_ReloadWeapon()
 {
-	GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Cyan, TEXT("Initiate_ReloadWeapon"), false);
+	//GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Cyan, TEXT("Initiate_ReloadWeapon"), false);
+	if (!IsValid(CurrentWeapon)) return;
+	if (CurrentWeapon->WeaponStatus == EWeaponStatus::Cycling || CurrentWeapon->WeaponStatus == EWeaponStatus::Reloading) return;
+	if (CurrentWeapon->Ammo == CurrentWeapon->MagCapacity)
+	{
+		return; // We could do something here like sound effect or text popup "Weapon is already fully loaded"
+	}
+	if (CurrentReserveAmmo == 0) return;
+	
+	Local_ReloadWeapon();
+	Server_ReloadWeapon();
+	
+}
+
+void UCombatComponent::Local_ReloadWeapon()
+{
+	APawn* OwningPawn = Cast<APawn>(GetOwner());
+	if (!IsValid(CurrentWeapon) || !IsValid(OwningPawn)) return;
+	ensure(WeaponData);
+	
+	// Player montage
+	const bool bIsLocal = OwningPawn->IsLocallyControlled();
+	
+	UAnimMontage* ReloadMontage = 
+		bIsLocal ?
+		WeaponData->FirstPersonMontages.FindChecked(CurrentWeapon->WeaponType).ReloadMontage:
+		WeaponData->ThirdPersonMontages.FindChecked(CurrentWeapon->WeaponType).ReloadMontage;
+	
+	USkeletalMeshComponent* Mesh = 
+		bIsLocal ?
+		IPlayerInterface::Execute_GetMesh1P(OwningPawn):
+		IPlayerInterface::Execute_GetMesh3P(OwningPawn);
+	
+	if (IsValid(Mesh) && IsValid(ReloadMontage))
+	{
+		Mesh->GetAnimInstance()->Montage_Play(ReloadMontage);
+	}
+	
+	// Weapon montage
+	UAnimMontage* WeaponReloadMontage = WeaponData->WeaponMontages.FindChecked(CurrentWeapon->WeaponType).ReloadMontage;
+	USkeletalMeshComponent* WeaponMesh = 
+		bIsLocal ?
+		CurrentWeapon->GetMesh1P():
+		CurrentWeapon->GetMesh3P();
+	
+	if (IsValid(WeaponReloadMontage) && IsValid(WeaponMesh))
+	{
+		WeaponMesh->GetAnimInstance()->Montage_Play(WeaponReloadMontage);
+	}
+	
+	// Change weapon status
+	CurrentWeapon->WeaponStatus = EWeaponStatus::Reloading;
+}
+
+void UCombatComponent::Server_ReloadWeapon_Implementation()
+{
+	Multicast_ReloadWeapon();
+}
+
+void UCombatComponent::Multicast_ReloadWeapon_Implementation()
+{
+	Local_ReloadWeapon();
+}
+
+void UCombatComponent::Client_ReloadWeapon_Implementation(int32 NewWeaponAmmo, int32 NewCarriedAmmo)
+{
+	APawn* OwningPawn = Cast<APawn>(GetOwner());
+	if (!IsValid(CurrentWeapon) || !IsValid(OwningPawn)) return;
+	
+	if (OwningPawn->IsLocallyControlled())
+	{
+		CurrentWeapon->Ammo = NewWeaponAmmo;
+		CurrentReserveAmmo = NewCarriedAmmo;
+		// Update widgets
+		OnAmmoCounterChanged.Broadcast(CurrentWeapon->GetAmmoCounterDynamicMaterialInstance(), CurrentWeapon->Ammo, CurrentWeapon->MagCapacity);
+		OnCurrentReserveAmmoChanged.Broadcast(CurrentReserveAmmo, CurrentWeapon->Ammo, CurrentWeapon->WeaponIcon);
+	}
+}
+
+void UCombatComponent::Notify_ReloadWeapon()
+{
+	if (!IsValid(CurrentWeapon)) return;
+	
+	if (GetNetMode() == NM_ListenServer || GetNetMode() == NM_DedicatedServer || GetNetMode() == NM_Standalone)
+	{
+		// Actual reloading ammo calculation
+		const int32 EmptySpace = CurrentWeapon->MagCapacity - CurrentWeapon->Ammo;
+		const int32 AmountToRefill = FMath::Min(EmptySpace, CurrentReserveAmmo);
+		CurrentWeapon->Ammo += AmountToRefill;
+		ReserveAmmo[CurrentWeapon->WeaponType] = ReserveAmmo[CurrentWeapon->WeaponType] - AmountToRefill;
+		CurrentReserveAmmo = ReserveAmmo[CurrentWeapon->WeaponType];
+		// All of that happens on the server only, so we need to do and RPC to the locally controlled client
+		Client_ReloadWeapon(CurrentWeapon->Ammo, CurrentReserveAmmo);
+	}
+	
+	CurrentWeapon->WeaponStatus = EWeaponStatus::Idle;
+	
+	// Optional for if we want to immediately start firing after reloading (while holding down LMB)
+	/*
+	if (bTriggerPressed && CurrentWeapon->Ammo > 0)
+	{
+		Local_FireWeapon();
+	}
+	*/
+}
+
+void UCombatComponent::AddAmmo(const FGameplayTag& WeaponType, int32 AmmoAmount)
+{
+	// This is "triggered" via ammo pickups which are created by just using BP classes
+	// See lecture 67 for setting up the BP classes with also custom collision presets & stuff
+	
+	if (GetOwner()->HasAuthority() && !IsValid(CurrentWeapon)) return;
+	
+	// If we pick up a type of ammo that we don't have yet, add it to the map
+	if (!ReserveAmmo.Contains(WeaponType))
+	{
+		ReserveAmmo.Add(WeaponType, AmmoAmount);
+	}
+	
+	const int32 NewAmmo = ReserveAmmo.FindChecked(WeaponType) + AmmoAmount;
+	ReserveAmmo[WeaponType] = NewAmmo;
+	
+	if (CurrentWeapon->WeaponType.MatchesTagExact(WeaponType))
+	{
+		CurrentReserveAmmo = NewAmmo;
+		if (CurrentWeapon->Ammo == 0 && NewAmmo > 0)
+		{
+			Server_ReloadWeapon();
+		}
+		
+		OnAmmoCounterChanged.Broadcast(CurrentWeapon->GetAmmoCounterDynamicMaterialInstance(), CurrentWeapon->Ammo, CurrentWeapon->MagCapacity);
+		OnCurrentReserveAmmoChanged.Broadcast(CurrentReserveAmmo, CurrentWeapon->Ammo, CurrentWeapon->WeaponIcon);
+	}
 }
 
 void UCombatComponent::Initiate_Aim_Pressed()
@@ -387,14 +550,21 @@ void UCombatComponent::SetCurrentWeapon(AWeapon* NewWeapon, AWeapon* LastWeapon)
 	
 	CurrentWeapon = NewWeapon;
 	APawn* OwningPawn = Cast<APawn>(GetOwner());
-	if (IsValid(OwningPawn) && OwningPawn->HasAuthority() && IsValid(CurrentWeapon))
+	if (!IsValid(OwningPawn)) return;
+	if (!IsValid(CurrentWeapon)) return;
+	
+	if (OwningPawn->HasAuthority())
 	{
 		CurrentReserveAmmo = ReserveAmmo.FindChecked(CurrentWeapon->WeaponType);
 	}
 	
-	if (IsValid(OwningPawn))
+	CurrentWeapon->AttachToOwningPawn(OwningPawn);
+	
+	// If we swap to a weapon that is empty and we have ammo, we could auto-reload
+	if (CurrentWeapon->Ammo == 0 && CurrentReserveAmmo > 0 && OwningPawn->IsLocallyControlled())
 	{
-		CurrentWeapon->AttachToOwningPawn(OwningPawn);
+		Local_ReloadWeapon();
+		Server_ReloadWeapon();
 	}
 }
 
