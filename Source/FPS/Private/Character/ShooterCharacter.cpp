@@ -3,13 +3,21 @@
 #include "Character/ShooterCharacter.h"
 
 #include "EnhancedInputComponent.h"
+#include "TimerManager.h"
+#include "Animation/AnimInstance.h"
 #include "Camera/CameraComponent.h"
 #include "Combat/CombatComponent.h"
+#include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Data/WeaponData.h"
+#include "FPS/FPS.h"
+#include "Game/ShooterGameModeBase.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/SpringArmComponent.h"
+#include "Health/HealthComponent.h"
+#include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetMathLibrary.h"
+#include "Player/ShooterPlayerController.h"
 #include "Weapon/Weapon.h"
 
 AShooterCharacter::AShooterCharacter()
@@ -47,19 +55,32 @@ AShooterCharacter::AShooterCharacter()
 	Combat = CreateDefaultSubobject<UCombatComponent>("Combat");
 	Combat->SetIsReplicated(true);
 	
+	Health = CreateDefaultSubobject<UHealthComponent>("Health");
+	Health->SetIsReplicated(true);
+	
 	DefaultFieldOfView = 90.f;
 	
 	TurningStatus = ETurningInPlace::NotTurning;
 	
 	bWeaponFirstReplicated = false;
+	
+	RespawnTime = 3.f;
 }
 
 void AShooterCharacter::BeginPlay()
 {
 	Super::BeginPlay();
 	
+	Health->OnDeathStarted.AddDynamic(this, &ThisClass::OnDeathStarted);
+	
 	FirstPersonCamera->SetFieldOfView(DefaultFieldOfView);
 	StartingAimRotation = FRotator(0.f, GetBaseAimRotation().Yaw, 0.f);
+	
+	
+	if (AShooterPlayerController* PC = Cast<AShooterPlayerController>(GetController()); IsValid(PC))
+	{
+		PC->bPawnAlive = true;
+	}
 }
 
 void AShooterCharacter::BeginDestroy()
@@ -179,6 +200,11 @@ void AShooterCharacter::PossessedBy(AController* NewController)
 	{
 		Combat->SpawnInventory();
 	}
+	// VIA EXTRA COMMIT FROM DISCORD CHAT (https://github.com/DruidMech/UE5_Multiplayer_FPS/commit/df3dcdbe60a4204215de4627f37f5bca2404efa7#diff-d379eaf8239eae44851cafffb8f9dc3efdf279ba35f4c2bc32c5646a5770b910)
+	if (AShooterPlayerController* PC = Cast<AShooterPlayerController>(GetController()); IsValid(PC))
+	{
+		PC->bPawnAlive = true;
+	}
 }
 
 void AShooterCharacter::OnRep_PlayerState()
@@ -188,6 +214,12 @@ void AShooterCharacter::OnRep_PlayerState()
 	if (IsValid(Combat))
 	{
 		Combat->InitializeWeaponWidgets();
+	}
+	
+	// VIA EXTRA COMMIT FROM DISCORD CHAT (https://github.com/DruidMech/UE5_Multiplayer_FPS/commit/df3dcdbe60a4204215de4627f37f5bca2404efa7#diff-d379eaf8239eae44851cafffb8f9dc3efdf279ba35f4c2bc32c5646a5770b910)
+	if (AShooterPlayerController* PC = Cast<AShooterPlayerController>(GetController()); IsValid(PC))
+	{
+		PC->bPawnAlive = true;
 	}
 }
 
@@ -241,6 +273,70 @@ void AShooterCharacter::AddAmmo_Implementation(const FGameplayTag& WeaponType, i
 	if (HasAuthority() && IsValid(Combat))
 	{
 		Combat->AddAmmo(WeaponType, AmmoAmount);
+	}
+}
+
+bool AShooterCharacter::DoDamage_Implementation(float DamageAmount, AActor* DamageInstigator)
+{
+	// Do actual damage
+	if (!IsValid(Health)) return false;
+	
+	Health->ChangeHealthByAmount(-DamageAmount, DamageInstigator);
+	
+	// Calculate if damage was lethal
+	
+	
+	// Play HitReact montage
+	const int32 MontageSelection = FMath::RandRange(0, HitReacts.Num() - 1);
+	Multicast_HitReact(MontageSelection);
+	
+	return false;
+}
+
+void AShooterCharacter::Multicast_HitReact_Implementation(int32 MontageIndex)
+{
+	if (GetNetMode() != NM_DedicatedServer && !IsLocallyControlled())
+	{
+		if (HitReacts.IsValidIndex(MontageIndex))
+		{
+			GetMesh()->GetAnimInstance()->Montage_Play(HitReacts[MontageIndex]);
+		}
+	}
+}
+
+void AShooterCharacter::OnDeathStarted()
+{
+	if (HasAuthority())
+	{
+		Combat->DestroyInventory();
+		GetWorld()->GetTimerManager().SetTimer(DeathTimer, this, &ThisClass::DeathTimerFinished, RespawnTime);
+	}
+	
+	if (GetNetMode() != NM_DedicatedServer)
+	{
+		DeathEffects();
+		
+		if (AShooterPlayerController* PC = Cast<AShooterPlayerController>(GetController()); IsValid(PC))
+		{
+			DisableInput(PC);
+			if (PC->IsLocalController())
+			{
+				PC->bPawnAlive = false;
+			}
+		}
+	}
+	
+	GetCapsuleComponent()->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
+	GetCapsuleComponent()->SetCollisionResponseToChannel(FPSTraceChannels::ECC_Weapon, ECR_Ignore);
+	GetMesh()->SetCollisionResponseToChannel(FPSTraceChannels::ECC_Weapon, ECR_Ignore);
+}
+
+void AShooterCharacter::DeathTimerFinished()
+{
+	AShooterGameModeBase* GM = Cast<AShooterGameModeBase>(UGameplayStatics::GetGameMode(this));
+	if (IsValid(GM))
+	{
+		GM->RequestRespawn(this, GetController());
 	}
 }
 

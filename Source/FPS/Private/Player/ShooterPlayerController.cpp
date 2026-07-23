@@ -11,6 +11,7 @@
 AShooterPlayerController::AShooterPlayerController()
 {
 	bReplicates = true;
+	bPawnAlive = true;
 }
 
 void AShooterPlayerController::BeginPlay()
@@ -35,9 +36,17 @@ void AShooterPlayerController::SetupInputComponent()
 	ShooterInputComponent->BindAction(JumpAction, ETriggerEvent::Started, this, &ThisClass::Input_Jump);
 }
 
+// VIA EXTRA COMMIT FROM DISCORD CHAT (https://github.com/DruidMech/UE5_Multiplayer_FPS/commit/df3dcdbe60a4204215de4627f37f5bca2404efa7#diff-d379eaf8239eae44851cafffb8f9dc3efdf279ba35f4c2bc32c5646a5770b910)
+void AShooterPlayerController::OnPossess(APawn* InPawn)
+{
+	Super::OnPossess(InPawn);
+	bPawnAlive = true;
+}
+
 void AShooterPlayerController::Input_Crouch()
 {
 	if (!IsValid(GetCharacter())) return;
+	if (!bPawnAlive) return;
 	
 	if (UCharacterMovementComponent* CMC = GetCharacter()->GetCharacterMovement(); IsValid(CMC))
 	{
@@ -48,6 +57,7 @@ void AShooterPlayerController::Input_Crouch()
 void AShooterPlayerController::Input_Jump()
 {
 	if (!IsValid(GetCharacter())) return;
+	if (!bPawnAlive) return;
 	
 	UCharacterMovementComponent* CMC = GetCharacter()->GetCharacterMovement();
 	if (!IsValid(CMC)) return;
@@ -64,6 +74,8 @@ void AShooterPlayerController::Input_Jump()
 
 void AShooterPlayerController::Input_Move(const FInputActionValue& InputActionValue)
 {
+	if (!bPawnAlive) return;
+	
 	const FVector2D InputAxisVector = InputActionValue.Get<FVector2D>();
 	const FRotator Rotation = GetControlRotation();
 	const FRotator YawRotation(0.f, Rotation.Yaw, 0.f);
@@ -79,6 +91,8 @@ void AShooterPlayerController::Input_Move(const FInputActionValue& InputActionVa
 
 void AShooterPlayerController::Input_Look(const FInputActionValue& InputActionValue)
 {
+	if (!bPawnAlive) return;
+	
 	const FVector2D InputAxisVector = InputActionValue.Get<FVector2D>();
 	
 	AddYawInput(InputAxisVector.X);

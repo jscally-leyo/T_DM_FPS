@@ -40,6 +40,8 @@ AWeapon::AWeapon()
 	Sequence = 0;
 	
 	WeaponStatus = EWeaponStatus::Idle;
+	
+	Damage = 15.f;
 }
 
 void AWeapon::BeginPlay()

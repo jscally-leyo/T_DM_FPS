@@ -8,6 +8,7 @@
 #include "ShooterTypes/ShooterTypes.h"
 #include "ShooterCharacter.generated.h"
 
+class UHealthComponent;
 class UInputAction;
 class UCombatComponent;
 class UCameraComponent;
@@ -40,6 +41,7 @@ public:
 	virtual void Notify_CycleWeapon_Implementation() override;
 	virtual void Notify_ReloadWeapon_Implementation() override;
 	virtual void AddAmmo_Implementation(const FGameplayTag& WeaponType, int32 AmmoAmount) override;
+	virtual bool DoDamage_Implementation(float DamageAmount, AActor* DamageInstigator) override;
 	/** <-- PlayerInterface */
 	
 	virtual void BeginPlay() override;
@@ -59,9 +61,23 @@ public:
 	
 	bool HasWeaponFirstReplicated() const {return bWeaponFirstReplicated; };
 	
+	// We fill these in the BP-class, but also need to be aware of the slot that these montages use and add that slot to the animation BP (the AdditiveHitReact-slot in this case)
+	UPROPERTY(EditDefaultsOnly, Category = "FPS|HitReact")
+	TArray<TObjectPtr<UAnimMontage>> HitReacts;
+	
+	UPROPERTY(EditDefaultsOnly, Category = "FPS|Respawn")
+	float RespawnTime;
+	
 protected:
+	// 1st person view (arms) - 3rd person mesh is inherited from the Character class
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "FPS|Mesh")
+	TObjectPtr<USkeletalMeshComponent> Mesh1P;
+	
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "FPS|Combat")
 	TObjectPtr<UCombatComponent> Combat;
+	
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "FPS|Health")
+	TObjectPtr<UHealthComponent> Health;
 	
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "FPS|Camera")
 	TObjectPtr<UCameraComponent> FirstPersonCamera;
@@ -81,6 +97,15 @@ protected:
 	UPROPERTY(BlueprintReadOnly, Category = "FPS|Strafing")
 	float MovementOffsetYaw;
 	
+	UFUNCTION(NetMulticast, Reliable)
+	void Multicast_HitReact(int32 MontageIndex);
+	
+	UFUNCTION()
+	void OnDeathStarted();
+	
+	UFUNCTION(BlueprintImplementableEvent)
+	void DeathEffects();
+	
 private:
 	// Input callbacks
 	void Input_CycleWeapon();
@@ -89,10 +114,6 @@ private:
 	void Input_FireWeapon_Released();
 	void Input_AimWeapon_Pressed();
 	void Input_AimWeapon_Released();
-	
-	// 1st person view (arms) - 3rd person mesh is inherited from the Character class
-	UPROPERTY(VisibleAnywhere)
-	TObjectPtr<USkeletalMeshComponent> Mesh1P;
 	
 	UPROPERTY(VisibleAnywhere)
 	TObjectPtr<USpringArmComponent> SpringArm;
@@ -117,4 +138,7 @@ private:
 	float InterpAO_Yaw;
 	
 	bool bWeaponFirstReplicated;
+	
+	FTimerHandle DeathTimer;
+	void DeathTimerFinished();
 };

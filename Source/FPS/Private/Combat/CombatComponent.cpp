@@ -289,6 +289,13 @@ void UCombatComponent::Server_FireWeapon_Implementation(const FHitResult& Hit)
 	// UPDATE: was fixed in lecture 64 'Automatic Reload' by placing an extra if (!GetInstigator()->HasAuthority()) in Local_Fire() and Rep_Fire() in Weapon.cpp
 	if (CurrentWeapon->Ammo <= 0) return;
 	
+	// We only want to do damage on the server
+	// AShooterCharacter::DoDamage_Implementation takes care of the multicast part
+	if (IsValid(Hit.GetActor()) && Hit.GetActor()->Implements<UPlayerInterface>())
+	{
+		IPlayerInterface::Execute_DoDamage(Hit.GetActor(), CurrentWeapon->Damage, GetOwner());
+	}
+	
 	//ORIGINAL CODE: if (GetNetMode() != NM_ListenServer || !Cast<APawn>(GetOwner())->IsLocallyControlled())
 	// if ((GetNetMode() != NM_ListenServer && GetNetMode() != NM_Standalone ) || !Cast<APawn>(GetOwner())->IsLocallyControlled())
 	if (!Cast<APawn>(GetOwner())->IsLocallyControlled())

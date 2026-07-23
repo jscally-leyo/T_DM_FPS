@@ -91,6 +91,9 @@ public:
 	
 	EWeaponStatus WeaponStatus;
 	
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "FPS|Damage")
+	float Damage;
+	
 protected:
 	virtual void BeginPlay() override;
 	
