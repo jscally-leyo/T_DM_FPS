@@ -193,7 +193,7 @@ void AShooterCharacter::OnRep_PlayerState()
 
 FName AShooterCharacter::GetWeaponAttachPoint_Implementation(const FGameplayTag& WeaponType) const
 {
-	checkf(Combat->WeaponData, TEXT("No Weapon Data Asset - Please fill out BP_ShooterCharacter"))
+	checkf(Combat->WeaponData, TEXT("No Weapon Data Asset - Please fill that out in BP_ShooterCharacter"))
 	return Combat->WeaponData->GripPoints.FindChecked(WeaponType);
 }
 
